@@ -30,15 +30,10 @@ import unidic
 PLUGIN_NAME = 'Japanese Romanisation Variables'
 PLUGIN_AUTHOR = 'snobdiggy'
 PLUGIN_DESCRIPTION = 'Add additional variables for romanising Japanese titles.'
-PLUGIN_VERSION = '0.1'
+PLUGIN_VERSION = '0.2'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 
-tagger = fugashi.Tagger(unidic.DICDIR)
-kks = pykakasi.kakasi()
-for mode in ['H', 'K', 'J']:
-    kks.setMode(mode, 'a')
-conv = kks.getConverter()
 
 spaces_pattern_left = re.compile(r'([^a-zA-Z0-9.,?!;:)}\]\u300D\u300F\uFF09\u3015\uFF3D\uFF5D\uFF60\u3009'
                                  r'\u300B\u3011\u3017\u3019\u301B\s])(\s)')
@@ -51,54 +46,96 @@ punc_dict = {
 }
 
 
-def make_vars(mbz_tagger, metadata, release, source_type):
+class JapaneseTagger(object):
 
-    romanised_tokens = []
-    source_text = metadata[source_type].replace('\u30FB', ' ')
-    romanised_string_formatted = source_text
+    __instance__ = None
 
-    tagger.parse(source_text)
-
-    # Preserve casing
-    for word in tagger(source_text):
-        convword = conv.do(str(word))
-        if str(word).lower() != convword.lower():
-            romanised_tokens.append(convword.title())
-            romanised_string_formatted = romanised_string_formatted.replace(str(word), convword.title())
+    def __init__(self):
+        if JapaneseTagger.__instance__ is None:
+            JapaneseTagger.__instance__ = self
+            self.tagger = fugashi.Tagger(unidic.DICDIR)
+            log.debug('%s: Tagger initialised.', PLUGIN_NAME)
+            _kks = pykakasi.kakasi()
+            for mode in ['H', 'K', 'J']:
+                _kks.setMode(mode, 'a')
+            self.conv = _kks.getConverter()
         else:
-            romanised_tokens.append(str(word))
+            raise Exception('Tagger object cannot be initialised more than once.')
 
-    romanised_string_search = re.sub(r'\W', '', romanised_string_formatted).lower()
+    @staticmethod
+    def get_instance():
+        if not JapaneseTagger.__instance__:
+            JapaneseTagger()
+            return JapaneseTagger.__instance__
+        else:
+            return JapaneseTagger.__instance__
 
-    # Standardised Roman String
-    romanised_string_standardised = ' '.join(romanised_tokens)
-    romanised_string_standardised = re.sub(spaces_pattern_left, r'\1',
-                                           unicodedata.normalize('NFKC', romanised_string_standardised))
-    romanised_string_standardised = re.sub(spaces_pattern_right, r'\2', romanised_string_standardised)
-    for key, value in punc_dict.items():
-        romanised_string_standardised = romanised_string_standardised.replace(key, value)
+    def tokenise(self, text):
+        self.tagger.parse(text)
 
-    # Populate the variables
-    metadata['~{}_jp_romanised_search'.format(source_type)] = romanised_string_search
-    metadata['~{}_jp_romanised_standardised'.format(source_type)] = romanised_string_standardised
-    metadata['~{}_jp_romanised_formatted'.format(source_type)] = romanised_string_formatted
+    def get_tokens(self, text):
+        return self.tagger(text)
 
-
-def make_album_vars(mbz_tagger, metadata, release):
-    try:
-        mbz_id = release['id']
-    except (KeyError, TypeError, ValueError, AttributeError):
-        mbz_id = 'N/A'
-    if metadata['script'].lower() == 'jpan':
-        make_vars(mbz_tagger, metadata, release, 'album')
-    else:
-        log.info('%s: Script is not Japanese, skipping release ID "%s"', PLUGIN_NAME, mbz_id)
+    def translierate(self, token):
+        return self.conv.do(str(token))
 
 
-def make_track_vars(mbz_tagger, metadata, track, release):
-    if metadata['script'].lower() == 'jpan':
-        make_vars(mbz_tagger, metadata, release, 'title')
+# noinspection PyUnusedLocal
+class JapaneseRomaniser(object):
+
+    def __init__(self):
+
+        pass
+
+    # noinspection PyMethodMayBeStatic
+    def make_vars(self, mbz_tagger, metadata, release, source_type):
+
+        romanised_tokens = []
+        source_text = metadata[source_type].replace('\u30FB', ' ')
+        romanised_string_formatted = source_text
+
+        jtagger = JapaneseTagger.get_instance()
+        jtagger.tokenise(source_text)
+
+        # Preserve casing
+        for token in jtagger.get_tokens(source_text):
+            token = str(token)
+            convtoken = jtagger.translierate(token)
+            if str(token).lower() != convtoken.lower():
+                romanised_tokens.append(convtoken.title())
+                romanised_string_formatted = romanised_string_formatted.replace(str(token), convtoken.title())
+            else:
+                romanised_tokens.append(str(token))
+
+        romanised_string_search = re.sub(r'\W', '', romanised_string_formatted).lower()
+
+        # Standardised Roman String
+        romanised_string_standardised = ' '.join(romanised_tokens)
+        romanised_string_standardised = re.sub(spaces_pattern_left, r'\1',
+                                               unicodedata.normalize('NFKC', romanised_string_standardised))
+        romanised_string_standardised = re.sub(spaces_pattern_right, r'\2', romanised_string_standardised)
+        for key, value in punc_dict.items():
+            romanised_string_standardised = romanised_string_standardised.replace(key, value)
+
+        # Populate the variables
+        metadata['~{}_jp_romanised_search'.format(source_type)] = romanised_string_search
+        metadata['~{}_jp_romanised_standardised'.format(source_type)] = romanised_string_standardised
+        metadata['~{}_jp_romanised_formatted'.format(source_type)] = romanised_string_formatted
+
+    def make_album_vars(self, mbz_tagger, metadata, release):
+        try:
+            mbz_id = release['id']
+        except (KeyError, TypeError, ValueError, AttributeError):
+            mbz_id = 'N/A'
+        if metadata['script'].lower() == 'jpan':
+            self.make_vars(mbz_tagger, metadata, release, 'album')
+        else:
+            log.info('%s: Script is not Japanese, skipping release ID "%s"', PLUGIN_NAME, mbz_id)
+
+    def make_track_vars(self, mbz_tagger, metadata, track, release):
+        if metadata['script'].lower() == 'jpan':
+            self.make_vars(mbz_tagger, metadata, release, 'title')
 
 
-register_album_metadata_processor(make_album_vars, priority=PluginPriority.LOW)
-register_track_metadata_processor(make_track_vars, priority=PluginPriority.LOW)
+register_album_metadata_processor(JapaneseRomaniser().make_album_vars, priority=PluginPriority.LOW)
+register_track_metadata_processor(JapaneseRomaniser().make_track_vars, priority=PluginPriority.LOW)
