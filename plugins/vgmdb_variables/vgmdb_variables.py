@@ -143,25 +143,19 @@ class VGMdbMetadataProcessor(object):
             self.check_album_request_cache(tagger, metadata, release_dict, self.searchpage_cache[release_id])
 
         # Try to find VGMdb entry from MBZ data
-        if 'relations' in release_dict:
-            relations = release_dict['relations']
-
-            for relation in relations:
-                if 'type' in relation and relation['type'] == 'vgmdb':
-                    url = relation['url']['resource']
-                    vgmdb_id = re.search(self.vgmdb_url_pattern, url).group(1)
-                    self.searchpage_cache[release_id] = vgmdb_id
-                    self.check_album_request_cache(tagger, metadata, release_dict, vgmdb_id)
-                    break
+        vgmdb_id = self.get_vgmdb_id_from_relations(release_dict)
+        if vgmdb_id is not None:
+            self.searchpage_cache[release_id] = vgmdb_id
+            self.check_album_request_cache(tagger, metadata, release_dict, vgmdb_id)
 
         # Try to find VGMdb entry using search
-        if vgmdb_id is None:
+        else:
             self.search_mode_enable()
             # noinspection PyProtectedMember
             self.make_vgmdb_search_request(tagger, metadata, release_dict)
 
     # noinspection PyMethodMayBeStatic
-    def get_vgmdb_products(self, release_dict, response, strict_mode):
+    def get_vgmdb_products(self, release_dict, response):
 
         def sanitise(string):
             pattern = re.compile(r'\W')
@@ -186,7 +180,7 @@ class VGMdbMetadataProcessor(object):
                 log.warning('%s: Key error', PLUGIN_NAME)
                 return None, None
 
-        if not strict_mode:
+        if self.get_vgmdb_id_from_relations(release_dict) is not None:
             return pack_products(response)
 
         if 'artist-credit' not in release_dict:
@@ -224,6 +218,21 @@ class VGMdbMetadataProcessor(object):
                         return pack_products(response)
 
         return None, None
+
+    def get_vgmdb_id_from_relations(self, release_dict):
+
+        vgmdb_id = None
+
+        if 'relations' in release_dict:
+            relations = release_dict['relations']
+
+            for relation in relations:
+                if 'type' in relation and relation['type'] == 'vgmdb':
+                    url = relation['url']['resource']
+                    vgmdb_id = re.search(self.vgmdb_url_pattern, url).group(1)
+                    break
+
+        return vgmdb_id
 
     # noinspection PyMethodMayBeStatic
     def get_vgmdb_id_from_search(self, release_dict, response):
@@ -264,7 +273,7 @@ class VGMdbMetadataProcessor(object):
                 self.album_remove_request(tagger)
             return
 
-        en_products, jp_products = self.get_vgmdb_products(release_dict, response, self.search_mode_isenabled())
+        en_products, jp_products = self.get_vgmdb_products(release_dict, response)
         self.albumpage_cache[vgmdb_id] = (en_products, jp_products)
 
         tuples = self.albumpage_queue.remove(vgmdb_id)
