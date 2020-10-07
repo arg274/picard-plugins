@@ -137,5 +137,5 @@ class JapaneseRomaniser(object):
             self.make_vars(mbz_tagger, metadata, release, 'title')
 
 
-register_album_metadata_processor(JapaneseRomaniser().make_album_vars, priority=PluginPriority.LOW)
-register_track_metadata_processor(JapaneseRomaniser().make_track_vars, priority=PluginPriority.LOW)
+register_album_metadata_processor(JapaneseRomaniser().make_album_vars, priority=PluginPriority.HIGH)
+register_track_metadata_processor(JapaneseRomaniser().make_track_vars, priority=PluginPriority.HIGH)
