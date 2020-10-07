@@ -18,6 +18,8 @@
 # 02110-1301, USA.
 
 
+import re
+
 from picard import log
 from picard.metadata import (register_album_metadata_processor,
                              register_track_metadata_processor)
@@ -29,10 +31,21 @@ PLUGIN_AUTHOR = 'Bob Swift (rdswift), snobdiggy'
 PLUGIN_DESCRIPTION = '''This plugin provides specialized album and track variables for use in naming scripts. It is 
 based on the "Additional Artists Variables" plugin, but expands the functionality to also allow swapping of sort 
 artists.'''
-PLUGIN_VERSION = '0.1'
+PLUGIN_VERSION = '0.2'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
+
+
+def process_feat_string(string):
+
+    _feat_re = re.compile(r"([\s\S]+) feat\.([\s\S]+)", re.IGNORECASE)
+
+    match = _feat_re.match(string)
+    if match:
+        return match.group(1), '(feat.{})'.format(match.group(2))
+
+    return string, ''
 
 
 def process_artists(album_id, source_metadata, destination_metadata, source_type):
@@ -144,6 +157,9 @@ def process_artists(album_id, source_metadata, destination_metadata, source_type
             destination_metadata['~artists_{0}_all_sort'.format(source_type, )] = sort_artist
         if sort_artist_swapped:
             destination_metadata['~artists_{0}_all_sort_swapped'.format(source_type, )] = sort_artist_swapped
+            sort_nofeat_artist_swapped, sort_feat_artist_swapped = process_feat_string(sort_artist_swapped)
+            destination_metadata['~artists_{0}_nofeat_sort_swapped'.format(source_type, )] = sort_nofeat_artist_swapped
+            destination_metadata['~artists_{0}_feat_sort_swapped'.format(source_type, )] = sort_feat_artist_swapped
         if std_artist_list:
             destination_metadata['~artists_{0}_all_std_multi'.format(source_type, )] = std_artist_list
         if cred_artist_list:
