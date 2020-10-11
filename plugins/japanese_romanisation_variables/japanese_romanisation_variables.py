@@ -30,7 +30,7 @@ import unidic
 PLUGIN_NAME = 'Japanese Romanisation Variables'
 PLUGIN_AUTHOR = 'snobdiggy'
 PLUGIN_DESCRIPTION = 'Add additional variables for romanising Japanese titles.'
-PLUGIN_VERSION = '0.2'
+PLUGIN_VERSION = '0.2.1'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 
@@ -76,7 +76,7 @@ class JapaneseTagger(object):
     def get_tokens(self, text):
         return self.tagger(text)
 
-    def translierate(self, token):
+    def transliterate(self, token):
         return self.conv.do(str(token))
 
 
@@ -100,7 +100,7 @@ class JapaneseRomaniser(object):
         # Preserve casing
         for token in jtagger.get_tokens(source_text):
             token = str(token)
-            convtoken = jtagger.translierate(token)
+            convtoken = jtagger.transliterate(token)
             if str(token).lower() != convtoken.lower():
                 romanised_tokens.append(convtoken.title())
                 romanised_string_formatted = romanised_string_formatted.replace(str(token), convtoken.title())
@@ -111,11 +111,11 @@ class JapaneseRomaniser(object):
 
         # Standardised Roman String
         romanised_string_standardised = ' '.join(romanised_tokens)
+        for key, value in punc_dict.items():
+            romanised_string_standardised = romanised_string_standardised.replace(key, value)
         romanised_string_standardised = re.sub(spaces_pattern_left, r'\1',
                                                unicodedata.normalize('NFKC', romanised_string_standardised))
         romanised_string_standardised = re.sub(spaces_pattern_right, r'\2', romanised_string_standardised)
-        for key, value in punc_dict.items():
-            romanised_string_standardised = romanised_string_standardised.replace(key, value)
 
         # Populate the variables
         metadata['~{}_jp_romanised_search'.format(source_type)] = romanised_string_search
