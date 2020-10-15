@@ -97,7 +97,7 @@ class Pronouncer(object):
             # 5. 홑받침이나 쌍받침이 모음으로 시작된 조사나 어미, 접미사와 결합되는 경우에는, 
             # 제 음가대로 뒤 음절 첫소리로 옮겨 발음한다. 
             if next_syllable and final_is_before_v:
-                if next_syllable.initial == NULL_CONSONANT:
+                if next_syllable.initial == NULL_CONSONANT and syllable.final is not None:
                     next_syllable.initial = next_syllable.final_to_initial(syllable.final)
                     syllable.final = None
                     
