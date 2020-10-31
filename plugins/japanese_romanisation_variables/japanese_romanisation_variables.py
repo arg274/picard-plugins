@@ -107,7 +107,7 @@ class JapaneseRomaniser(object):
             else:
                 romanised_tokens.append(str(token))
 
-        romanised_string_search = re.sub(r'\W', '', romanised_string_formatted).lower()
+        romanised_string_search = re.sub(r'\W', '', romanised_string_formatted).title()
 
         # Standardised Roman String
         romanised_string_standardised = ' '.join(romanised_tokens)
