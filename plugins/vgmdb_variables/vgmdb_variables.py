@@ -7,7 +7,6 @@ from picard.webservice import ratecontrol
 from picard.metadata import register_track_metadata_processor
 from picard import log
 
-
 PLUGIN_NAME = 'VGMdb Variables'
 PLUGIN_AUTHOR = 'snobdiggy'
 PLUGIN_DESCRIPTION = 'Add additional variables fot VGMdb data. Only adds variables for products associated ' \
@@ -167,8 +166,9 @@ class VGMdbMetadataProcessor(object):
             product_list_jp = []
 
             try:
-                if 'products' in response:
-                    products = response['products']
+                if 'products' in _response:
+                    products = _response['products']
+                    log.debug('%s: Products: %s', PLUGIN_NAME, products)
                     for product in products:
                         product_list_en.append(product['names']['en'])
                         if 'ja' in product['names']:
@@ -192,13 +192,20 @@ class VGMdbMetadataProcessor(object):
 
         for artist in release_dict['artist-credit']:
             if 'artist' in artist:
-                source_artists.append(artist['artist']['name'].lower())
+                source_artists.append(sanitise(artist['artist']['name']).lower())
 
         for personnel_type in ['performers', 'composers', 'organizations']:
             if personnel_type in response:
                 for personnel in response[personnel_type]:
                     for name in personnel['names']:
-                        vgmdb_artists.append(personnel['names'][name].lower())
+                        vgmdb_artists.append(sanitise(personnel['names'][name]).lower())
+
+        for lang in response['names']:
+            if ' / ' in response['names'][lang]:
+                if lang == 'ja':
+                    vgmdb_artists.append(sanitise(response['names'][lang].split(' / ')[1]).lower())
+                else:
+                    vgmdb_artists.append(response['names'][lang].split(' / ')[1].lower())
 
         if 'Various Artists' in source_artists:
 
@@ -308,7 +315,6 @@ class VGMdbMetadataProcessor(object):
         self.album_add_request(tagger)
 
         if self.albumpage_queue.append(vgmdb_id, (track_obj, tagger)):
-
             path = '/album/{}'.format(vgmdb_id)
             params = {'format': 'json'}
 
@@ -346,7 +352,6 @@ class VGMdbMetadataProcessor(object):
         self.album_add_request(tagger)
 
         if self.searchpage_queue.append(mbz_id, tagger):
-
             path = '/search/albums/{}'.format(album_title)
             params = {'format': 'json'}
 
