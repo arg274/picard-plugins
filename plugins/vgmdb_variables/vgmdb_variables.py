@@ -11,7 +11,7 @@ PLUGIN_NAME = 'VGMdb Variables'
 PLUGIN_AUTHOR = 'snobdiggy'
 PLUGIN_DESCRIPTION = 'Add additional variables fot VGMdb data. Only adds variables for products associated ' \
                      'with a release for the moment being.'
-PLUGIN_VERSION = '0.2.1'
+PLUGIN_VERSION = '0.2.2'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 
 
