@@ -30,7 +30,7 @@ import unidic
 PLUGIN_NAME = 'Japanese Romanisation Variables'
 PLUGIN_AUTHOR = 'snobdiggy'
 PLUGIN_DESCRIPTION = 'Add additional variables for romanising Japanese titles.'
-PLUGIN_VERSION = '0.2.1'
+PLUGIN_VERSION = '0.2.2'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 
@@ -107,7 +107,9 @@ class JapaneseRomaniser(object):
             else:
                 romanised_tokens.append(str(token))
 
-        romanised_string_search = re.sub(r'\W', '', romanised_string_formatted).title()
+        romanised_string_search = romanised_string_formatted
+        if source_text.lower() != romanised_string_formatted.lower():
+            romanised_string_search = re.sub(r'\W', '', romanised_string_formatted).title()
 
         # Standardised Roman String
         romanised_string_standardised = ' '.join(romanised_tokens)
