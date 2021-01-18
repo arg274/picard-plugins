@@ -10,7 +10,7 @@ from .korean_romanizer import Romanizer
 PLUGIN_NAME = 'Korean Romanisation Variables'
 PLUGIN_AUTHOR = 'snobdiggy'
 PLUGIN_DESCRIPTION = 'Add additional variables for romanising Korean titles.'
-PLUGIN_VERSION = '0.1'
+PLUGIN_VERSION = '0.1.1'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 
