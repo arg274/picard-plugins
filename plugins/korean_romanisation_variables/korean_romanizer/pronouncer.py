@@ -26,20 +26,20 @@ class Pronouncer(object):
     def final_substitute(self):
         for idx, syllable in enumerate(self._syllables):
             try:
-                next_syllable = self._syllables[idx+1]
+                next_syllable = self._syllables[idx + 1]
             except IndexError:
                 next_syllable = None
-                
-            try:    
+
+            try:
                 final_is_before_c = syllable.final and next_syllable.initial not in (None, NULL_CONSONANT)
             except AttributeError:
                 final_is_before_c = False
-                
-            try:    
+
+            try:
                 final_is_before_v = syllable.final and next_syllable.initial in (None, NULL_CONSONANT)
             except AttributeError:
                 final_is_before_v = False
-            
+
             # 1. 받침 ‘ㄲ, ㅋ’, ‘ㅅ, ㅆ, ㅈ, ㅊ, ㅌ’, ‘ㅍ’은 어말 또는 자음 앞에서 각각 대표음 [ㄱ, ㄷ, ㅂ]으로 발음한다.
             # 2. 겹받침 ‘ㄳ’, ‘ㄵ’, ‘ㄼ, ㄽ, ㄾ’, ‘ㅄ’은 어말 또는 자음 앞에서 각각 [ㄱ, ㄴ, ㄹ, ㅂ]으로 발음한다.
             # 3. 겹받침 ‘ㄺ, ㄻ, ㄿ’은 어말 또는 자음 앞에서 각각 [ㄱ, ㅁ, ㅂ]으로 발음한다.
@@ -57,10 +57,10 @@ class Pronouncer(object):
                     syllable.final = 'ᆯ'
                 elif syllable.final in ['ᆱ']:
                     syllable.final = 'ᆷ'
-            
+
             # 4. 받침 ‘ㅎ’의 발음은 다음과 같다.
             if syllable.final in ['ᇂ', 'ᆭ', 'ᆶ']:
-                
+
                 if next_syllable:
                     # ‘ㅎ(ㄶ, ㅀ)’ 뒤에 ‘ㄱ, ㄷ, ㅈ’이 결합되는 경우에는, 뒤 음절 첫소리와 합쳐서 [ㅋ, ㅌ, ㅊ]으로 발음한다.
                     # ‘ㅎ(ㄶ, ㅀ)’ 뒤에 ‘ㅅ’이 결합되는 경우에는, ‘ㅅ’을 [ㅆ]으로 발음한다.
@@ -75,7 +75,7 @@ class Pronouncer(object):
                             if syllable.final == 'ᆭ':
                                 syllable.final = 'ᆫ'
                             elif syllable.final == 'ᆶ':
-                                syllable.final = 'ᆯ' 
+                                syllable.final = 'ᆯ'
                         else:
                             syllable.final = 'ᆫ'
                     # 4. ‘ㅎ(ㄶ, ㅀ)’ 뒤에 모음으로 시작된 어미나 접미사가 결합되는 경우에는,
@@ -85,7 +85,7 @@ class Pronouncer(object):
                             if syllable.final == 'ᆭ':
                                 syllable.final = 'ᆫ'
                             elif syllable.final == 'ᆶ':
-                                syllable.final = 'ᆯ' 
+                                syllable.final = 'ᆯ'
                         else:
                             syllable.final = None
                     else:
@@ -94,14 +94,14 @@ class Pronouncer(object):
                 else:
                     if syllable.final == 'ᇂ':
                         syllable.final = None
-            # 5. 홑받침이나 쌍받침이 모음으로 시작된 조사나 어미, 접미사와 결합되는 경우에는, 
-            # 제 음가대로 뒤 음절 첫소리로 옮겨 발음한다. 
+            # 5. 홑받침이나 쌍받침이 모음으로 시작된 조사나 어미, 접미사와 결합되는 경우에는,
+            # 제 음가대로 뒤 음절 첫소리로 옮겨 발음한다.
             if next_syllable and final_is_before_v:
-                if next_syllable.initial == NULL_CONSONANT and syllable.final is not None:
+                if next_syllable.initial == NULL_CONSONANT and syllable.final not in ["ᆼ", None]:
                     next_syllable.initial = next_syllable.final_to_initial(syllable.final)
                     syllable.final = None
-                    
-            # 6. 겹받침이 모음으로 시작된 조사나 어미, 접미사와 결합되는 경우에는, 
+
+            # 6. 겹받침이 모음으로 시작된 조사나 어미, 접미사와 결합되는 경우에는,
             # 뒤엣것만을 뒤 음절 첫소리로 옮겨 발음한다.(이 경우, ‘ㅅ’은 된소리로 발음함.)
             if syllable.final in double_consonant_final:
                 double_consonant = double_consonant_final[syllable.final]
