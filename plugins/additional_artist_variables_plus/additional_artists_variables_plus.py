@@ -31,7 +31,7 @@ PLUGIN_AUTHOR = 'Bob Swift (rdswift), snobdiggy'
 PLUGIN_DESCRIPTION = '''This plugin provides specialized album and track variables for use in naming scripts. It is 
 based on the "Additional Artists Variables" plugin, but expands the functionality to also allow swapping of sort 
 artists.'''
-PLUGIN_VERSION = '0.2'
+PLUGIN_VERSION = '0.2.1'
 PLUGIN_API_VERSIONS = ['2.0', '2.1', '2.2']
 PLUGIN_LICENSE = 'GPL-2.0-or-later'
 PLUGIN_LICENSE_URL = 'https://www.gnu.org/licenses/gpl-2.0.html'
@@ -63,6 +63,8 @@ def process_artists(album_id, source_metadata, destination_metadata, source_type
         additional_cred_artist = ''
         std_artist_list = []
         cred_artist_list = []
+        cred_artist_list_nofeat = []
+        cred_artist_list_feat = []
         sort_artist_list = []
         sort_artist_list_swapped = []
         artist_count = 0
@@ -153,6 +155,12 @@ def process_artists(album_id, source_metadata, destination_metadata, source_type
             destination_metadata['~artists_{0}_all_std'.format(source_type, )] = std_artist
         if cred_artist:
             destination_metadata['~artists_{0}_all_cred'.format(source_type, )] = cred_artist
+            _, cred_artist_feat = process_feat_string(cred_artist)
+            for cred_artist_element in cred_artist_list:
+                if cred_artist_element in cred_artist_feat:
+                    cred_artist_list_feat.append(cred_artist_element)
+                else:
+                    cred_artist_list_nofeat.append(cred_artist_element)
         if sort_artist:
             destination_metadata['~artists_{0}_all_sort'.format(source_type, )] = sort_artist
         if sort_artist_swapped:
@@ -172,6 +180,10 @@ def process_artists(album_id, source_metadata, destination_metadata, source_type
             destination_metadata['~artists_{0}_all_sort_primary'.format(source_type, )] = sort_pri_artist
         if artist_count:
             destination_metadata['~artists_{0}_all_count'.format(source_type, )] = artist_count
+        if cred_artist_list_feat:
+            destination_metadata['~artists_{0}_feat_cred_multi'.format(source_type, )] = cred_artist_list_feat
+        if cred_artist_list_nofeat:
+            destination_metadata['~artists_{0}_nofeat_cred_multi'.format(source_type, )] = cred_artist_list_nofeat
     else:
         # No valid metadata found.  Log as error.
         metadata_error(album_id, 'artist-credit', source_type)
