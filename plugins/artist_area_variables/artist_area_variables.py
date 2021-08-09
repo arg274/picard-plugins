@@ -5,12 +5,11 @@ from picard.util import LockableObject
 from picard.metadata import register_track_metadata_processor
 from functools import partial
 
-
 PLUGIN_NAME = 'Album Artist Area'
-PLUGIN_AUTHOR = 'Sophist, Sambhav Kothari, snobdiggy'
+PLUGIN_AUTHOR = 'snobdiggy, Sophist, Sambhav Kothari'
 PLUGIN_DESCRIPTION = '''Add's the album artist(s) area
 (if they are defined in the MusicBrainz database).'''
-PLUGIN_VERSION = '0.2.1'
+PLUGIN_VERSION = '0.3.0'
 PLUGIN_API_VERSIONS = ["2.0", "2.1", "2.2"]
 PLUGIN_LICENSE = "GPL-2.0"
 PLUGIN_LICENSE_URL = "https://www.gnu.org/licenses/gpl-2.0.html"
@@ -61,15 +60,20 @@ class AlbumArtistArea:
             self.unlock()
             return value
 
-    class AreaQueue(ArtistQueue):
-        pass
-
     class AreaList:
         class Area:
             def __init__(self, area_id, area_name, parent_id):
                 self.area_id = area_id
                 self.name = area_name
                 self.parent_id = parent_id
+
+            def __eq__(self, other):
+                if not isinstance(other, AlbumArtistArea.AreaList.Area):
+                    return NotImplemented
+                return self.area_id == other.area_id
+
+            def __str__(self):
+                return '{id: {}, name: {}, parent_id: {}}'.format(self.area_id, self.name, self.parent_id)
 
         def __init__(self):
             self.areas = []
@@ -79,30 +83,59 @@ class AlbumArtistArea:
                 self.areas.append(area)
 
         def get(self):
-            innermost_area = None
-            outermost_area = None
+            innermost_area_name = None
+            outermost_area_name = None
+            log.debug("%s: arealist: %s", PLUGIN_NAME, self.areas)
             if self.areas:
-                outermost_area = self.areas[-1].name
-                innermost_area = self.areas[0].name if len(self.areas) > 1 else None
-            return innermost_area, outermost_area
+                outermost_area = self.areas[-1]
+                outermost_area_name = outermost_area.name
+                for idx in range(len(self.areas) - 1, 0, -1):
+                    if self.areas[idx].area_id != self.areas[idx - 1].parent_id:
+                        self.areas[0:idx] = []
+                        log.debug("%s: arealist post-delete: %s", PLUGIN_NAME, self.areas)
+                        break
+                innermost_area = self.areas[0] if self.areas[-1] != self.areas[0] else None
+                if innermost_area:
+                    innermost_area_name = innermost_area.name
+            return innermost_area_name, outermost_area_name
+
+        def clear(self):
+            self.areas.clear()
 
     def __init__(self):
         self.area_cache = {}
         self.artist_queue = self.ArtistQueue()
-        self.area_queue = self.AreaQueue()
         self.area_list = self.AreaList()
 
+    @staticmethod
+    def populate_as_list(metadata_var, val):
+        if not metadata_var:
+            if val:
+                return [val]
+        else:
+            log.debug("%s: Metadata var = %s", PLUGIN_NAME, metadata_var)
+            if val not in metadata_var:
+                if isinstance(metadata_var, str):
+                    metadata_var = [metadata_var, val]
+                elif isinstance(metadata_var, list):
+                    metadata_var.append(val)
+            return metadata_var
+        return None
+
     def add_artist_area(self, tagger, track_metadata, track_node, release_node):
-        areas = set()
         album_artist_ids = track_metadata.getall('musicbrainz_albumartistid')
 
         for album_artist_id in album_artist_ids:
             if album_artist_id in self.area_cache:
                 if self.area_cache[album_artist_id]:
-                    track_metadata['artistarea'], track_metadata['artistcountry']\
-                        = self.area_cache[album_artist_id]
+                    track_metadata['artistarea'] = self.populate_as_list(track_metadata['artistarea'],
+                                                                         self.area_cache[album_artist_id][0])
+                    track_metadata['artistcountry'] = self.populate_as_list(track_metadata['artistcountry'],
+                                                                            self.area_cache[album_artist_id][1])
             else:
                 self.make_request_artist(tagger, tagger._new_tracks[-1], album_artist_id)
+
+        self.area_list.clear()
 
     def make_request_artist(self, tagger, track, artist_id):
         tagger._requests += 1
@@ -129,7 +162,7 @@ class AlbumArtistArea:
 
     def artist_process(self, tagger, artist_id, response, reply, error):
         if error:
-            log.error("%s: %r: Network error retrieving artist record", PLUGIN_NAME, artist_id)
+            log.error("%s: %s: Network error retrieving artist record", PLUGIN_NAME, artist_id)
             tuples = self.artist_queue.remove(artist_id)
             for track, tagger in tuples:
                 tagger._requests -= 1
@@ -137,27 +170,34 @@ class AlbumArtistArea:
             return
 
         area_id = self.artist_parse_response(response)
-        self.make_request_area(tagger, artist_id, area_id)
+        self.area_list.clear()
+        if area_id:
+            self.make_request_area(tagger, artist_id, area_id)
+        else:
+            tuples = self.artist_queue.remove(artist_id)
+            for track, tagger in tuples:
+                tagger._requests -= 1
+                tagger._finalize_loading(None)
 
-        log.debug("%s: %r: Response = %s", PLUGIN_NAME, artist_id, area_id)
+        log.debug("%s: %s: Response = %s", PLUGIN_NAME, artist_id, area_id)
 
     @staticmethod
     def artist_parse_response(response):
         try:
             area_id = response['area']['id']
             return area_id
-        except KeyError:
+        except (TypeError, KeyError):
             return None
 
     def area_process(self, tagger, artist_id, area_id, response, reply, error):
         if error:
-            log.error("%s: %r: Network error retrieving area record", PLUGIN_NAME, area_id)
+            log.error("%s: %s: Network error retrieving area record", PLUGIN_NAME, area_id)
             tagger._requests -= 1
             tagger._finalize_loading(None)
             return
 
         area = self.area_parse_response(response)
-        log.debug("%s: %r: Response = %s %s", PLUGIN_NAME, area_id, area.name, area.parent_id)
+        log.debug("%s: %s: Response = %s %s", PLUGIN_NAME, area_id, area.name, area.parent_id)
         self.area_list.add(area)
 
         if area.parent_id is not None:
@@ -170,16 +210,16 @@ class AlbumArtistArea:
             for track, tagger in tuples:
                 if innermost_area:
                     tm = track.metadata
-                    tm['artistarea'] = innermost_area
+                    tm['artistarea'] = self.populate_as_list(tm['artistarea'], innermost_area)
                     for file in track.iterfiles(True):
                         fm = file.metadata
-                        fm['artistarea'] = innermost_area
+                        fm['artistarea'] = self.populate_as_list(fm['artistarea'], innermost_area)
                 if outermost_area:
                     tm = track.metadata
-                    tm['artistcountry'] = outermost_area
+                    tm['artistcountry'] = self.populate_as_list(tm['artistcountry'], outermost_area)
                     for file in track.iterfiles(True):
                         fm = file.metadata
-                        fm['artistcountry'] = outermost_area
+                        fm['artistcountry'] = self.populate_as_list(fm['artistcountry'], outermost_area)
 
                 tagger._requests -= 1
                 tagger._finalize_loading(None)
@@ -196,7 +236,7 @@ class AlbumArtistArea:
                         parent_id = entry['area']['id']
                         break
             return self.AreaList.Area(response['id'], response['name'], parent_id)
-        except KeyError:
+        except (TypeError, KeyError):
             return self.AreaList.Area(None, None, None)
 
 
