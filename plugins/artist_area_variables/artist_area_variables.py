@@ -10,15 +10,15 @@ PLUGIN_NAME = 'Album Artist Area'
 PLUGIN_AUTHOR = 'Sophist, Sambhav Kothari, snobdiggy'
 PLUGIN_DESCRIPTION = '''Add's the album artist(s) area
 (if they are defined in the MusicBrainz database).'''
-PLUGIN_VERSION = '0.1.1'
+PLUGIN_VERSION = '0.2'
 PLUGIN_API_VERSIONS = ["2.0", "2.1", "2.2"]
 PLUGIN_LICENSE = "GPL-2.0"
 PLUGIN_LICENSE_URL = "https://www.gnu.org/licenses/gpl-2.0.html"
 
 
+# noinspection PyProtectedMember
 class AlbumArtistArea:
-
-    class ArtistAreaQueue(LockableObject):
+    class ArtistQueue(LockableObject):
 
         def __init__(self):
             LockableObject.__init__(self)
@@ -61,75 +61,111 @@ class AlbumArtistArea:
             self.unlock()
             return value
 
+    class AreaQueue(ArtistQueue):
+        pass
+
     def __init__(self):
         self.area_cache = {}
-        self.area_queue = self.ArtistAreaQueue()
+        self.artist_queue = self.ArtistQueue()
+        self.area_queue = self.AreaQueue()
 
-    def add_artist_area(self, album, track_metadata, track_node, release_node):
+    def add_artist_area(self, tagger, track_metadata, track_node, release_node):
+        areas = set()
         album_artist_ids = track_metadata.getall('musicbrainz_albumartistid')
-        for artistId in album_artist_ids:
-            if artistId in self.area_cache:
-                if self.area_cache[artistId]:
-                    track_metadata['artistarea'] = self.area_cache[artistId]
-            else:
-                # Jump through hoops to get track object!!
-                # noinspection PyProtectedMember
-                self.area_add_track(album, album._new_tracks[-1], artistId)
 
-    def area_add_track(self, album, track, artist_id):
-        self.album_add_request(album)
-        if self.area_queue.append(artist_id, (track, album)):
+        for album_artist_id in album_artist_ids:
+            if album_artist_id in self.area_cache:
+                if self.area_cache[album_artist_id]:
+                    track_metadata['artistarea'] = self.area_cache[album_artist_id]
+            else:
+                self.make_request_artist(tagger, tagger._new_tracks[-1], album_artist_id)
+
+    def make_request_artist(self, tagger, track, artist_id):
+        tagger._requests += 1
+        if self.artist_queue.append(artist_id, (track, tagger)):
             host = config.setting["server_host"]
             port = config.setting["server_port"]
             path = "/ws/2/%s/%s" % ('artist', artist_id)
-            queryargs = {"inc": "url-rels"}
-            return album.tagger.webservice.get(host, port, path,
-                                               partial(self.area_process, artist_id),
-                                               parse_response_type="xml", priority=True, important=False,
-                                               queryargs=queryargs)
+            queryargs = {"fmt": "json"}
+            return tagger.tagger.webservice.get(host, port, path,
+                                                partial(self.artist_process, tagger, artist_id),
+                                                parse_response_type="json", priority=True, important=False,
+                                                queryargs=queryargs)
 
-    def area_process(self, artist_id, response, reply, error):
+    def make_request_area(self, tagger, artist_id, area_id):
+        host = config.setting["server_host"]
+        port = config.setting["server_port"]
+        path = "/ws/2/%s/%s" % ('area', area_id)
+        queryargs = {"fmt": "json",
+                     "inc": "area-rels"}
+        return tagger.tagger.webservice.get(host, port, path,
+                                            partial(self.area_process, tagger, artist_id, area_id),
+                                            parse_response_type="json", priority=True, important=False,
+                                            queryargs=queryargs)
+
+    def artist_process(self, tagger, artist_id, response, reply, error):
         if error:
             log.error("%s: %r: Network error retrieving artist record", PLUGIN_NAME, artist_id)
-            tuples = self.area_queue.remove(artist_id)
-            for track, album in tuples:
-                self.album_remove_request(album)
+            tuples = self.artist_queue.remove(artist_id)
+            for track, tagger in tuples:
+                tagger._requests -= 1
+                tagger._finalize_loading(None)
             return
-        urls = self.artist_process_metadata(artist_id, response)
-        self.area_cache[artist_id] = urls
-        tuples = self.area_queue.remove(artist_id)
-        log.debug("%s: %r: Artist Official Homepages = %r", PLUGIN_NAME,
-                  artist_id, urls)
-        for track, album in tuples:
-            if urls:
-                tm = track.metadata
-                tm['artistarea'] = urls
-                for file in track.iterfiles(True):
-                    fm = file.metadata
-                    fm['artistarea'] = urls
-            self.album_remove_request(album)
 
-    # noinspection PyMethodMayBeStatic
-    def album_add_request(self, album):
-        # noinspection PyProtectedMember
-        album._requests += 1
+        area_id = self.artist_parse_response(response)
+        self.make_request_area(tagger, artist_id, area_id)
 
-    # noinspection PyMethodMayBeStatic,PyProtectedMember
-    def album_remove_request(self, album):
-        album._requests -= 1
-        album._finalize_loading(None)
+        log.debug("%s: %r: Response = %s", PLUGIN_NAME, artist_id, area_id)
 
-    # noinspection PyMethodMayBeStatic
-    def artist_process_metadata(self, artist_id, response):
-        if 'metadata' in response.children:
-            if 'artist' in response.metadata[0].children:
-                if 'area' in response.metadata[0].artist[0].children:
-                    if 'name' in response.metadata[0].artist[0].area[0].children:
-                        return response.metadata[0].artist[0].area[0].name[0].text
-            else:
-                log.error("%s: %r: MusicBrainz artist xml result not in correct format - %s",
-                          PLUGIN_NAME, artist_id, response)
-        return None
+    @staticmethod
+    def artist_parse_response(response):
+        try:
+            area_id = response['area']['id']
+            return area_id
+        except KeyError:
+            return None
+
+    def area_process(self, tagger, artist_id, area_id, response, reply, error):
+        if error:
+            log.error("%s: %r: Network error retrieving area record", PLUGIN_NAME, area_id)
+            tagger._requests -= 1
+            tagger._finalize_loading(None)
+            return
+
+        area_name, prev_id = self.area_parse_response(response)
+        log.debug("%s: %r: Response = %s %s", PLUGIN_NAME, area_id, area_name, prev_id)
+
+        if prev_id is not None:
+            self.make_request_area(tagger, artist_id, prev_id)
+        else:
+            self.area_cache[artist_id] = area_name
+            tuples = self.artist_queue.remove(artist_id)
+            for track, tagger in tuples:
+                if area_name:
+                    tm = track.metadata
+                    tm['artistarea'] = area_name
+                    for file in track.iterfiles(True):
+                        fm = file.metadata
+                        fm['artistarea'] = area_name
+
+                tagger._requests -= 1
+                tagger._finalize_loading(None)
+
+        tagger._requests -= 1
+        tagger._finalize_loading(None)
+
+    @staticmethod
+    def area_parse_response(response):
+        try:
+            prev_id = None
+            if response['type'] != 'Country':
+                for entry in response['relations']:
+                    if entry['direction'] == 'backward':
+                        prev_id = entry['area']['id']
+                        break
+            return response['name'], prev_id
+        except KeyError:
+            return None, None
 
 
 register_track_metadata_processor(AlbumArtistArea().add_artist_area)
