@@ -1,9 +1,9 @@
 import requests
 
-from plugins.lyriks import lyricsapi
+from .lyricsapi import LyricsAPI
 
 
-class DeezerAPI(lyricsapi.LyricsAPI):
+class DeezerAPI(LyricsAPI):
 
     __instance__ = None
 
