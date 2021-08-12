@@ -1,9 +1,10 @@
-from .deezerapi import DeezerAPI
-from picard.metadata import register_track_metadata_processor
-from picard import log
-from picard.util import thread
 from functools import partial
 
+from picard import log
+from picard.metadata import register_track_metadata_processor
+from picard.util import thread
+
+from .deezerapi import DeezerAPI
 
 PLUGIN_NAME = 'Lyriks'
 PLUGIN_AUTHOR = 'snobdiggy'
@@ -20,22 +21,30 @@ class Lyriks:
         self.deez_api = DeezerAPI.get_instance()
 
     def process_lyrics(self, tagger, track_metadata, track_node, release_node):
-        thread.run_task(partial(self.fetch_lyrics, track_metadata), self.apply_lyrics)
+        thread.run_task(
+            partial(self.fetch_lyrics, tagger, track_metadata),
+            partial(self.apply_lyrics, tagger, track_metadata)
+        )
 
-    def fetch_lyrics(self, track_metadata=None):
-        isrcs = track_metadata.getall('isrc')
-        for isrc in isrcs:
-            lyrics = self.deez_api.get_lyrics_isrc(isrc)
-            track_metadata['lyrics'] = lyrics
-            log.debug("%s: ISRC: %s, lyrics = %s", PLUGIN_NAME, isrc, lyrics)
-            return track_metadata, lyrics
-        return track_metadata, None
+    def fetch_lyrics(self, tagger, track_metadata):
+        if track_metadata:
+            isrcs = track_metadata.getall('isrc')
+            for isrc in isrcs:
+                tagger._requests += 1
+                lyrics = self.deez_api.get_lyrics_isrc(isrc)
+                track_metadata['lyrics'] = lyrics
+                log.debug("%s: ISRC: %s, lyrics = %s", PLUGIN_NAME, isrc, lyrics)
+                return lyrics
+        return None
 
     @staticmethod
-    def apply_lyrics(result=None, error=None):
+    def apply_lyrics(tagger, track_metadata, result=None, error=None):
         if error:
             return
-        result[0]['lyrics'] = result[1]
+        else:
+            track_metadata['lyrics'] = result
+        tagger._requests -= 1
+        tagger._finalize_loading(None)
 
 
 register_track_metadata_processor(Lyriks().process_lyrics)

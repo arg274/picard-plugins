@@ -1,3 +1,5 @@
+from time import sleep
+
 import requests
 
 from .lyricsapi import LyricsAPI
@@ -79,7 +81,8 @@ class DeezerAPI(LyricsAPI):
             print(response.url)
             print(response_json)
             if 'error' in response_json and len(response_json['error']):
-                raise Exception
+                sleep(2)
+                return self.call_api(call_type, payload)
             return response_json['results']
         except Exception:
             return None
