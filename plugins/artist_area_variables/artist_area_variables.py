@@ -9,7 +9,7 @@ PLUGIN_NAME = 'Album Artist Area'
 PLUGIN_AUTHOR = 'snobdiggy, Sophist, Sambhav Kothari'
 PLUGIN_DESCRIPTION = '''Add's the album artist(s) area
 (if they are defined in the MusicBrainz database).'''
-PLUGIN_VERSION = '0.3.0'
+PLUGIN_VERSION = '0.3.1'
 PLUGIN_API_VERSIONS = ["2.0", "2.1", "2.2"]
 PLUGIN_LICENSE = "GPL-2.0"
 PLUGIN_LICENSE_URL = "https://www.gnu.org/licenses/gpl-2.0.html"
@@ -133,7 +133,10 @@ class AlbumArtistArea:
                     track_metadata['artistcountry'] = self.populate_as_list(track_metadata['artistcountry'],
                                                                             self.area_cache[album_artist_id][1])
             else:
-                self.make_request_artist(tagger, tagger._new_tracks[-1], album_artist_id)
+                try:
+                    self.make_request_artist(tagger, tagger._new_tracks[-1], album_artist_id)
+                except AttributeError:
+                    return
 
         self.area_list.clear()
 

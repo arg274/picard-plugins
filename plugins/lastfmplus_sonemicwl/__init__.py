@@ -18,7 +18,7 @@ PLUGIN_DESCRIPTION = '''Uses folksonomy tags from Last.fm to<br/>
 * Sort music into major and minor genres based on configurable genre "whitelists"<br/>
 * Add "mood", "occasion" and other custom categories<br/>
 * Add "original release year" and "decade" tags, as well as populate blank dates.'''
-PLUGIN_VERSION = "0.16.1.1"
+PLUGIN_VERSION = "0.16.1.2"
 PLUGIN_API_VERSIONS = ["2.0"]
 
 LASTFM_HOST = "ws.audioscrobbler.com"
@@ -979,8 +979,11 @@ def _tags_downloaded(album, metadata, sally, factor, get_next, current, data, re
     finally:
         # noinspection PyProtectedMember
         album._requests -= 1
-        # noinspection PyProtectedMember
-        album._finalize_loading(None)
+        try:
+            # noinspection PyProtectedMember
+            album._finalize_loading(None)
+        except AttributeError:
+            return
 
 
 def get_tags(album, metadata, artist, get_next, current, track=None, cachetag=None):
